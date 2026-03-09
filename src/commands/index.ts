@@ -3,13 +3,7 @@ import { Argument, Command, Flag } from "effect/unstable/cli";
 import { DEFAULT_OUTPUT_DIR } from "../constants.js";
 import { RunService } from "../services/Run.js";
 import { HostService } from "../services/Host.js";
-import {
-  encodeDryRunPreview,
-  encodeRunManifest,
-  type DryRunPreview,
-  type Provider,
-  type RunManifest,
-} from "../types.js";
+import { encodeDryRunPreview, encodeRunManifest, type Provider } from "../types.js";
 
 const promptArgument = Argument.string("prompt").pipe(
   Argument.optional,
@@ -43,34 +37,6 @@ const dryRunFlag = Flag.boolean("dry-run").pipe(
   Flag.withDescription("Resolve the route and command without executing"),
 );
 
-const jsonFlag = Flag.boolean("json").pipe(
-  Flag.withDefault(false),
-  Flag.withDescription("Emit JSON to stdout"),
-);
-
-const formatDryRun = (preview: DryRunPreview): string =>
-  [
-    `Source:   ${preview.source}`,
-    `Target:   ${preview.target}`,
-    `Profile:  ${preview.profile}`,
-    `Input:    ${preview.promptSource}`,
-    `Output:   ${preview.outputDir}`,
-    `Prompt:   ${preview.promptFilePath}`,
-    "",
-    `Command:  ${[preview.invocation.cmd, ...preview.invocation.args].join(" ")}`,
-  ].join("\n");
-
-const formatRunSummary = (manifest: RunManifest): string =>
-  [
-    `Source:   ${manifest.source}`,
-    `Target:   ${manifest.target}`,
-    `Profile:  ${manifest.profile}`,
-    `Status:   ${manifest.status}`,
-    `Output:   ${manifest.outputFile}`,
-    `Stderr:   ${manifest.stderrFile}`,
-    `Manifest: ${manifest.promptFilePath.replace(/\/prompt\.md$/, "/run.json")}`,
-  ].join("\n");
-
 export const command = Command.make(
   "counsel",
   {
@@ -80,9 +46,8 @@ export const command = Command.make(
     outputDir: outputDirFlag,
     deep: deepFlag,
     dryRun: dryRunFlag,
-    json: jsonFlag,
   },
-  ({ prompt, file, from, outputDir, deep, dryRun, json }) =>
+  ({ prompt, file, from, outputDir, deep, dryRun }) =>
     Effect.gen(function* () {
       const run = yield* RunService;
       const host = yield* HostService;
@@ -90,7 +55,7 @@ export const command = Command.make(
         Option.isNone(prompt) && Option.isNone(file) ? yield* host.readPipedStdin() : undefined;
       const cwd = yield* host.getCwd();
 
-      if (!json && !dryRun) {
+      if (!dryRun) {
         yield* Console.error("Routing prompt to the opposite agent...");
       }
 
@@ -106,22 +71,13 @@ export const command = Command.make(
       });
 
       if (result._tag === "DryRun") {
-        if (json) {
-          const encoded = yield* encodeDryRunPreview(result.preview);
-          yield* Console.log(encoded);
-          return;
-        }
-
-        yield* Console.error(formatDryRun(result.preview));
+        const encoded = yield* encodeDryRunPreview(result.preview);
+        yield* Console.log(encoded);
         return;
       }
 
-      if (json) {
-        const encoded = yield* encodeRunManifest(result.manifest);
-        yield* Console.log(encoded);
-      } else {
-        yield* Console.error(formatRunSummary(result.manifest));
-      }
+      const encoded = yield* encodeRunManifest(result.manifest);
+      yield* Console.log(encoded);
 
       if (result.manifest.status === "timeout") {
         yield* host.setExitCode(124);

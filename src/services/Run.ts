@@ -1,4 +1,4 @@
-import { Effect, Layer, Option, ServiceMap } from "effect";
+import { DateTime, Effect, Layer, Option, ServiceMap } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
 import type { PlatformError } from "effect/PlatformError";
@@ -6,7 +6,6 @@ import { CounselError, ErrorCode } from "../errors/index.js";
 import { AgentPlatformService } from "./AgentPlatform.js";
 import { InvocationRunnerService } from "./InvocationRunner.js";
 import type { DryRunPreview, Profile, Provider, RunManifest } from "../types.js";
-import { encodeRunManifest } from "../types.js";
 
 export type RunInput = {
   readonly cwd: string;
@@ -33,14 +32,11 @@ const promptConflict = Effect.fail(
   }),
 );
 
-export const generateSlug = (
-  source: Provider,
-  target: Provider,
-  now: Date = new Date(),
-): string => {
+export const generateSlug = (source: Provider, target: Provider, now: DateTime.Utc): string => {
+  const parts = DateTime.toPartsUtc(now);
   const pad = (value: number) => String(value).padStart(2, "0");
-  const stamp = [String(now.getFullYear()), pad(now.getMonth() + 1), pad(now.getDate())].join("");
-  const time = [pad(now.getHours()), pad(now.getMinutes()), pad(now.getSeconds())].join("");
+  const stamp = [String(parts.year), pad(parts.month), pad(parts.day)].join("");
+  const time = [pad(parts.hours), pad(parts.minutes), pad(parts.seconds)].join("");
   const suffix = crypto.randomUUID().slice(0, 6);
   return `${stamp}-${time}-${source}-to-${target}-${suffix}`;
 };
@@ -132,7 +128,8 @@ export class RunService extends ServiceMap.Service<
         const source = yield* platform.resolveSource(input.from);
         const target = platform.resolveTarget(source);
         const profile: Profile = input.deep ? "deep" : "standard";
-        const slug = generateSlug(source, target);
+        const now = yield* DateTime.now;
+        const slug = generateSlug(source, target, now);
         const outputDir = path.resolve(input.cwd, input.outputDir, slug);
         const promptFilePath = path.join(outputDir, "prompt.md");
         const invocation = yield* platform.buildInvocation(
@@ -178,7 +175,7 @@ export class RunService extends ServiceMap.Service<
         const executed = yield* invocationRunner.execute(invocation, outputFile, stderrFile);
 
         const manifest: RunManifest = {
-          timestamp: new Date().toISOString(),
+          timestamp: DateTime.formatIso(now),
           slug,
           cwd: input.cwd,
           promptSource: promptInput.promptSource,
@@ -192,17 +189,6 @@ export class RunService extends ServiceMap.Service<
           outputFile,
           stderrFile,
         };
-
-        const manifestJson = yield* encodeRunManifest(manifest).pipe(
-          Effect.mapError(
-            (error) =>
-              new CounselError({
-                message: `Failed to encode run manifest: ${error.message}`,
-                code: ErrorCode.WRITE_FAILED,
-              }),
-          ),
-        );
-        yield* writeTextFile(path.join(outputDir, "run.json"), `${manifestJson}\n`);
 
         return { _tag: "Completed" as const, manifest };
       });

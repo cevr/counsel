@@ -97,8 +97,6 @@ describe("RunService", () => {
       const outputText = yield* fs.readFileString(manifest.outputFile);
       const stderrText = yield* fs.readFileString(manifest.stderrFile);
       const promptText = yield* fs.readFileString(manifest.promptFilePath);
-      const runJsonPath = path.join(path.dirname(manifest.outputFile), "run.json");
-      const runJson = JSON.parse(yield* fs.readFileString(runJsonPath));
 
       expect(manifest.promptSource).toBe("file");
       expect(manifest.source).toBe("codex");
@@ -108,7 +106,9 @@ describe("RunService", () => {
       expect(promptText).toBe("check the command wiring");
       expect(outputText).toContain("second opinion");
       expect(stderrText).toContain("warning");
-      expect(runJson.target).toBe("claude");
+      expect(yield* fs.exists(path.join(path.dirname(manifest.outputFile), "run.json"))).toBe(
+        false,
+      );
     }).pipe(Effect.provide(TestLayer)),
   );
 

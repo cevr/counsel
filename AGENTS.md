@@ -4,6 +4,7 @@
 
 - Single-command CLI. Keep the public surface at `counsel [prompt]` plus flags.
 - No persisted config. No subcommands. No adapter/plugin system.
+- Print the preview/result payload to stdout. Do not reintroduce `--json` or persisted `run.json`.
 - Repo skill lives at `skills/counsel/`. If CLI behavior changes, update `README.md`, `skills/counsel/SKILL.md`, and `skills/counsel/agents/openai.yaml` in the same patch.
 
 ## Stack

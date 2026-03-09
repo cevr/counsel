@@ -22,14 +22,14 @@ What do you need?
 
 ## Quick Reference
 
-| Command                             | What it does                                           |
-| ----------------------------------- | ------------------------------------------------------ |
-| `counsel "prompt"`                  | Send an inline prompt to the opposite agent            |
-| `counsel -f prompt.md`              | Send a prompt file                                     |
-| `echo "prompt" \| counsel`          | Send stdin                                             |
-| `counsel --deep "prompt"`           | Use the deeper profile                                 |
-| `counsel --from claude "prompt"`    | Force source provider when auto-detection is ambiguous |
-| `counsel --dry-run --json "prompt"` | Preview the resolved invocation                        |
+| Command                          | What it does                                           |
+| -------------------------------- | ------------------------------------------------------ |
+| `counsel "prompt"`               | Send an inline prompt to the opposite agent            |
+| `counsel -f prompt.md`           | Send a prompt file                                     |
+| `echo "prompt" \| counsel`       | Send stdin                                             |
+| `counsel --deep "prompt"`        | Use the deeper profile                                 |
+| `counsel --from claude "prompt"` | Force source provider when auto-detection is ambiguous |
+| `counsel --dry-run "prompt"`     | Preview the resolved invocation                        |
 
 ## When to Use
 
@@ -68,7 +68,7 @@ Thoughts?
 1. Gather the local context yourself first. `counsel` does not do discovery.
 2. Write the prompt inline, from a file, or through stdin.
 3. Run `counsel`.
-4. Read `run.json` first, then the target output file.
+4. Read the stdout payload first, then the target output file if the run executed.
 
 Example:
 
@@ -84,18 +84,17 @@ counsel --from codex "Challenge this migration plan"
 
 ## Output
 
-Each run writes a directory under `./agents/counsel/<slug>/`:
+Each run writes a directory under `/tmp/counsel/<slug>/`:
 
 ```text
 prompt.md
-run.json
 claude.md or codex.md
 claude.stderr or codex.stderr
 ```
 
 Read in this order:
 
-1. `run.json` for source, target, status, and file paths
+1. stdout payload for source, target, status, and file paths
 2. `<target>.md` for the actual answer
 3. `<target>.stderr` if the status is `error` or `timeout`
 

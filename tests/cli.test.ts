@@ -63,8 +63,8 @@ const defaultPreview = (): RunResult => ({
     target: "codex",
     profile: "standard",
     promptSource: "inline",
-    outputDir: "/tmp/counsel/agents/counsel/demo",
-    promptFilePath: "/tmp/counsel/agents/counsel/demo/prompt.md",
+    outputDir: "/tmp/counsel/demo",
+    promptFilePath: "/tmp/counsel/demo/prompt.md",
     invocation: {
       cmd: "codex",
       args: ["exec", "Read the file"],
@@ -86,9 +86,9 @@ const defaultManifest = (): RunResult => ({
     status: "success",
     exitCode: 0,
     durationMs: 42,
-    promptFilePath: "/tmp/counsel/agents/counsel/demo-run/prompt.md",
-    outputFile: "/tmp/counsel/agents/counsel/demo-run/claude.md",
-    stderrFile: "/tmp/counsel/agents/counsel/demo-run/claude.stderr",
+    promptFilePath: "/tmp/counsel/demo-run/prompt.md",
+    outputFile: "/tmp/counsel/demo-run/claude.md",
+    stderrFile: "/tmp/counsel/demo-run/claude.stderr",
   },
 });
 
@@ -185,20 +185,21 @@ const runCli = (args: ReadonlyArray<string>, options: RunCliOptions = {}) =>
   });
 
 describe("counsel CLI", () => {
-  it.effect("prints a JSON dry-run preview", () =>
+  it.effect("prints a dry-run preview payload", () =>
     Effect.gen(function* () {
-      const result = yield* runCli(["--from", "claude", "--dry-run", "--json", "review this"]);
+      const result = yield* runCli(["--from", "claude", "--dry-run", "review this"]);
 
       expect(result.exitCode).toBe(0);
       const preview = JSON.parse(result.stdout);
       expect(preview.source).toBe("claude");
       expect(preview.target).toBe("codex");
       expect(preview.invocation.cmd).toBe("codex");
+      expect(preview.outputDir).toBe("/tmp/counsel/demo");
       expect(Option.isSome(result.runInputs[0]?.prompt ?? Option.none())).toBe(true);
     }),
   );
 
-  it.effect("prints progress and a summary for completed runs", () =>
+  it.effect("prints progress and a completed run payload", () =>
     Effect.gen(function* () {
       const result = yield* runCli(["--from", "codex", "challenge the migration plan"], {
         runImpl: () => Effect.succeed(defaultManifest()),
@@ -206,14 +207,15 @@ describe("counsel CLI", () => {
 
       expect(result.exitCode).toBe(0);
       expect(result.stderr).toContain("Routing prompt to the opposite agent...");
-      expect(result.stderr).toContain("Status:   success");
-      expect(result.stderr).toContain("claude.md");
+      const manifest = JSON.parse(result.stdout);
+      expect(manifest.status).toBe("success");
+      expect(manifest.outputFile).toBe("/tmp/counsel/demo-run/claude.md");
     }),
   );
 
-  it.effect("returns a usage error when source detection is ambiguous", () =>
+  it.effect("prints a structured error when source detection is ambiguous", () =>
     Effect.gen(function* () {
-      const result = yield* runCli(["--json", "review this"], {
+      const result = yield* runCli(["review this"], {
         runImpl: () =>
           Effect.fail(
             new CounselError({
@@ -229,9 +231,9 @@ describe("counsel CLI", () => {
     }),
   );
 
-  it.effect("emits JSON for invalid --from values", () =>
+  it.effect("prints a structured error for invalid --from values", () =>
     Effect.gen(function* () {
-      const result = yield* runCli(["--json", "--from", "nope", "review this"]);
+      const result = yield* runCli(["--from", "nope", "review this"]);
 
       expect(result.exitCode).toBe(2);
       const error = JSON.parse(result.stdout);
@@ -240,9 +242,9 @@ describe("counsel CLI", () => {
     }),
   );
 
-  it.effect("emits JSON for unknown flags", () =>
+  it.effect("prints a structured error for unknown flags", () =>
     Effect.gen(function* () {
-      const result = yield* runCli(["--json", "--bogus", "review this"]);
+      const result = yield* runCli(["--bogus", "review this"]);
 
       expect(result.exitCode).toBe(2);
       const error = JSON.parse(result.stdout);
@@ -262,7 +264,7 @@ describe("counsel CLI", () => {
 
   it.effect("does not read stdin when an inline prompt is provided", () =>
     Effect.gen(function* () {
-      const result = yield* runCli(["--from", "claude", "--dry-run", "--json", "review this"], {
+      const result = yield* runCli(["--from", "claude", "--dry-run", "review this"], {
         stdinText: "ignored stdin",
       });
 

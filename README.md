@@ -27,16 +27,17 @@ counsel --from claude -f prompt.md
 echo "Trace the data flow in src/" | counsel
 ```
 
-Flags: `-f/--file`, `--from`, `--deep`, `-o/--output-dir`, `--dry-run`, `--json`, `-V/--version`
+Flags: `-f/--file`, `--from`, `--deep`, `-o/--output-dir`, `--dry-run`, `-V/--version`
 
 ## Output
+
+`counsel` prints the preview or result payload to stdout.
 
 Each run writes:
 
 ```text
-agents/counsel/<slug>/
+/tmp/counsel/<slug>/
 ├── prompt.md
-├── run.json
 ├── claude.md or codex.md
 └── claude.stderr or codex.stderr
 ```

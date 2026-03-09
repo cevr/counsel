@@ -39,20 +39,6 @@ export const normalizeVersionAlias = (args: ReadonlyArray<string>): ReadonlyArra
   });
 };
 
-const hasFlag = (args: ReadonlyArray<string>, flag: string): boolean => {
-  for (const token of args) {
-    if (token === "--") {
-      return false;
-    }
-
-    if (token === flag) {
-      return true;
-    }
-  }
-
-  return false;
-};
-
 const validateChoice = (
   flag: string,
   value: string,
@@ -82,7 +68,7 @@ const readFlagValue = (
     : { nextIndex: index + 1, value: next };
 };
 
-export const validateJsonArgs = (args: ReadonlyArray<string>): string | undefined => {
+export const validateArgs = (args: ReadonlyArray<string>): string | undefined => {
   let positionalCount = 0;
   let treatRestAsArgs = false;
 
@@ -106,7 +92,6 @@ export const validateJsonArgs = (args: ReadonlyArray<string>): string | undefine
     }
 
     if (
-      token === "--json" ||
       token === "--deep" ||
       token === "--dry-run" ||
       token === "--help" ||
@@ -199,20 +184,15 @@ export const validateJsonArgs = (args: ReadonlyArray<string>): string | undefine
   return undefined;
 };
 
-const handleKnownError = (error: CounselError, wantsJson: boolean) =>
+const handleKnownError = (error: CounselError) =>
   Effect.gen(function* () {
     const host = yield* HostService;
-
-    if (wantsJson) {
-      const encoded = yield* encodeErrorPayload({
-        error: "CounselError",
-        code: error.code,
-        message: error.message,
-      });
-      yield* Console.log(encoded);
-    } else {
-      yield* Console.error(error.message);
-    }
+    const encoded = yield* encodeErrorPayload({
+      error: "CounselError",
+      code: error.code,
+      message: error.message,
+    });
+    yield* Console.log(encoded);
 
     yield* host.setExitCode(
       error.code === ErrorCode.CLI_USAGE_ERROR ||
@@ -229,16 +209,15 @@ const handleKnownError = (error: CounselError, wantsJson: boolean) =>
 
 export const runCounsel = (rawArgs: ReadonlyArray<string>) => {
   const args = normalizeVersionAlias(rawArgs);
-  const wantsJson = hasFlag(args, "--json");
-  const jsonUsageError = wantsJson ? validateJsonArgs(args) : undefined;
+  const usageError = validateArgs(args);
 
-  if (jsonUsageError !== undefined) {
+  if (usageError !== undefined) {
     return Effect.gen(function* () {
       const host = yield* HostService;
       const encoded = yield* encodeErrorPayload({
         error: "CliUsageError",
         code: ErrorCode.CLI_USAGE_ERROR,
-        message: jsonUsageError,
+        message: usageError,
       });
       yield* Console.log(encoded);
       yield* host.setExitCode(2);
@@ -247,6 +226,6 @@ export const runCounsel = (rawArgs: ReadonlyArray<string>) => {
 
   return Command.runWith(command, { version: VERSION })(args).pipe(
     Effect.tapDefect((defect) => Console.error(`Internal error: ${String(defect)}`)),
-    Effect.catchTag("CounselError", (error) => handleKnownError(error, wantsJson)),
+    Effect.catchTag("CounselError", handleKnownError),
   );
 };
