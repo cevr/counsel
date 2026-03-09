@@ -10,13 +10,16 @@
 
 - Bun runtime and package manager.
 - Effect v4 with `ServiceMap.Service`.
+- `HostService` owns `cwd`, env, stdin, and exit-code side effects.
 - `AgentPlatformService` owns provider detection and argv building.
-- `RunService` owns prompt resolution, execution, and artifact writing.
+- `InvocationRunnerService` owns child-process execution.
+- `RunService` owns prompt resolution and artifact writing around the runner.
 
 ## Verify
 
 - Run `bun run gate` before handoff.
-- Prefer tests around routing, prompt resolution, and file artifacts over shallow snapshots.
+- Prefer test layers over `Bun.spawn` in CLI tests.
+- Keep one layer of service integration where it pays off; stub child execution beneath that.
 
 ## Docs
 

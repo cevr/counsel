@@ -1,8 +1,8 @@
 import { Console, Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/unstable/cli";
 import { DEFAULT_OUTPUT_DIR } from "../constants.js";
-import { CounselError } from "../errors/index.js";
 import { RunService } from "../services/Run.js";
+import { HostService } from "../services/Host.js";
 import {
   encodeDryRunPreview,
   encodeRunManifest,
@@ -48,23 +48,6 @@ const jsonFlag = Flag.boolean("json").pipe(
   Flag.withDescription("Emit JSON to stdout"),
 );
 
-const readPipedStdin = (): Effect.Effect<string | undefined, CounselError> =>
-  Effect.tryPromise({
-    try: async () => {
-      if (process.stdin.isTTY) {
-        return undefined;
-      }
-
-      const text = await new Response(Bun.stdin.stream()).text();
-      return text.length > 0 ? text : undefined;
-    },
-    catch: (error) =>
-      new CounselError({
-        message: error instanceof Error ? error.message : String(error),
-        code: "READ_FAILED",
-      }),
-  });
-
 const formatDryRun = (preview: DryRunPreview): string =>
   [
     `Source:   ${preview.source}`,
@@ -88,18 +71,6 @@ const formatRunSummary = (manifest: RunManifest): string =>
     `Manifest: ${manifest.promptFilePath.replace(/\/prompt\.md$/, "/run.json")}`,
   ].join("\n");
 
-const setExitCodeForManifest = (manifest: RunManifest) =>
-  Effect.sync(() => {
-    if (manifest.status === "timeout") {
-      process.exitCode = 124;
-      return;
-    }
-
-    if (manifest.status !== "success") {
-      process.exitCode = 1;
-    }
-  });
-
 export const command = Command.make(
   "counsel",
   {
@@ -114,15 +85,17 @@ export const command = Command.make(
   ({ prompt, file, from, outputDir, deep, dryRun, json }) =>
     Effect.gen(function* () {
       const run = yield* RunService;
+      const host = yield* HostService;
       const stdinText =
-        Option.isNone(prompt) && Option.isNone(file) ? yield* readPipedStdin() : undefined;
+        Option.isNone(prompt) && Option.isNone(file) ? yield* host.readPipedStdin() : undefined;
+      const cwd = yield* host.getCwd();
 
       if (!json && !dryRun) {
         yield* Console.error("Routing prompt to the opposite agent...");
       }
 
       const result = yield* run.run({
-        cwd: process.cwd(),
+        cwd,
         prompt,
         file,
         stdinText,
@@ -150,7 +123,11 @@ export const command = Command.make(
         yield* Console.error(formatRunSummary(result.manifest));
       }
 
-      yield* setExitCodeForManifest(result.manifest);
+      if (result.manifest.status === "timeout") {
+        yield* host.setExitCode(124);
+      } else if (result.manifest.status !== "success") {
+        yield* host.setExitCode(1);
+      }
     }),
 ).pipe(
   Command.withDescription("Route a prompt to the opposite local coding agent"),

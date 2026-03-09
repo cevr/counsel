@@ -5,17 +5,34 @@ import { Effect, Layer, Option } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
 import { AgentPlatformService } from "../../src/services/AgentPlatform.js";
+import { InvocationRunnerService } from "../../src/services/InvocationRunner.js";
 import { RunService } from "../../src/services/Run.js";
 
 const RunLayer = RunService.layer.pipe(
   Layer.provideMerge(
     AgentPlatformService.layerTest({
-      ensureExecutable: () => Effect.succeed("bun"),
-      buildInvocation: (_provider, _promptFilePath, _profile, cwd) =>
+      ensureExecutable: () => Effect.succeed("codex"),
+      buildInvocation: (_provider, promptFilePath, _profile, cwd) =>
         Effect.succeed({
-          cmd: "bun",
-          args: ["-e", "console.log('second opinion'); console.error('warning');"],
+          cmd: "codex",
+          args: ["exec", `Read ${promptFilePath}`],
           cwd,
+        }),
+    }),
+  ),
+  Layer.provideMerge(
+    InvocationRunnerService.layerTest({
+      execute: (_invocation, outputFile, stderrFile) =>
+        Effect.promise(async () => {
+          await Promise.all([
+            Bun.write(outputFile, "second opinion\n"),
+            Bun.write(stderrFile, "warning\n"),
+          ]);
+          return {
+            exitCode: 0,
+            durationMs: 12,
+            timedOut: false,
+          };
         }),
     }),
   ),

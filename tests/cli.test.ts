@@ -1,211 +1,274 @@
 /** @effect-diagnostics effect/strictEffectProvide:skip-file effect/preferSchemaOverJson:skip-file */
 import { BunServices } from "@effect/platform-bun";
 import { describe, expect, it } from "effect-bun-test";
-import { Effect } from "effect";
-import { FileSystem } from "effect/FileSystem";
-import { Path } from "effect/Path";
+import { Console, Effect, Layer, Option } from "effect";
 import { VERSION } from "../src/constants.js";
+import { CounselError, ErrorCode } from "../src/errors/index.js";
+import { runCounsel } from "../src/program.js";
+import { HostService } from "../src/services/Host.js";
+import type { RunInput, RunResult } from "../src/services/Run.js";
+import { RunService } from "../src/services/Run.js";
 
 type CliResult = {
   readonly exitCode: number;
   readonly stdout: string;
   readonly stderr: string;
-  readonly timedOut: boolean;
+  readonly runInputs: ReadonlyArray<RunInput>;
+  readonly stdinReadCount: number;
 };
 
 type RunCliOptions = {
   readonly env?: Record<string, string | undefined>;
-  readonly stdinMode?: "ignore" | "pipe";
-  readonly stdinText?: string;
-  readonly closeStdin?: boolean;
-  readonly timeoutMs?: number;
+  readonly cwd?: string;
+  readonly stdinText?: string | undefined;
+  readonly runImpl?: (input: RunInput) => Effect.Effect<RunResult, CounselError>;
 };
 
-const REPO_ROOT = "/Users/cvr/Developer/personal/counsel";
+const stripAnsi = (text: string): string => {
+  let output = "";
+  let index = 0;
 
-const writeExecutable = (filePath: string, content: string) =>
-  Effect.gen(function* () {
-    const fs = yield* FileSystem;
-    yield* fs.writeFileString(filePath, content);
-    yield* fs.chmod(filePath, 0o755);
+  while (index < text.length) {
+    const char = text[index];
+    if (char === undefined) {
+      break;
+    }
+
+    if (char.charCodeAt(0) === 27 && text[index + 1] === "[") {
+      index += 2;
+      while (index < text.length) {
+        const marker = text[index];
+        if (marker === undefined) {
+          break;
+        }
+        index += 1;
+        if (marker === "m") {
+          break;
+        }
+      }
+      continue;
+    }
+
+    output += char;
+    index += 1;
+  }
+
+  return output;
+};
+
+const defaultPreview = (): RunResult => ({
+  _tag: "DryRun",
+  preview: {
+    source: "claude",
+    target: "codex",
+    profile: "standard",
+    promptSource: "inline",
+    outputDir: "/tmp/counsel/agents/counsel/demo",
+    promptFilePath: "/tmp/counsel/agents/counsel/demo/prompt.md",
+    invocation: {
+      cmd: "codex",
+      args: ["exec", "Read the file"],
+      cwd: "/tmp/counsel",
+    },
+  },
+});
+
+const defaultManifest = (): RunResult => ({
+  _tag: "Completed",
+  manifest: {
+    timestamp: "2026-03-08T00:00:00.000Z",
+    slug: "demo-run",
+    cwd: "/tmp/counsel",
+    promptSource: "inline",
+    source: "codex",
+    target: "claude",
+    profile: "deep",
+    status: "success",
+    exitCode: 0,
+    durationMs: 42,
+    promptFilePath: "/tmp/counsel/agents/counsel/demo-run/prompt.md",
+    outputFile: "/tmp/counsel/agents/counsel/demo-run/claude.md",
+    stderrFile: "/tmp/counsel/agents/counsel/demo-run/claude.stderr",
+  },
+});
+
+const testConsoleLayer = (stdout: Array<string>, stderr: Array<string>) =>
+  Layer.succeed(Console.Console, {
+    assert: () => undefined,
+    clear: () => undefined,
+    count: () => undefined,
+    countReset: () => undefined,
+    debug: (...args) => {
+      stdout.push(args.map(String).join(" "));
+    },
+    dir: (item) => {
+      stdout.push(String(item));
+    },
+    dirxml: (...args) => {
+      stdout.push(args.map(String).join(" "));
+    },
+    error: (...args) => {
+      stderr.push(args.map(String).join(" "));
+    },
+    group: (...args) => {
+      stderr.push(args.map(String).join(" "));
+    },
+    groupCollapsed: (...args) => {
+      stderr.push(args.map(String).join(" "));
+    },
+    groupEnd: () => undefined,
+    info: (...args) => {
+      stdout.push(args.map(String).join(" "));
+    },
+    log: (...args) => {
+      stdout.push(args.map(String).join(" "));
+    },
+    table: (tabularData) => {
+      stdout.push(String(tabularData));
+    },
+    time: () => undefined,
+    timeEnd: () => undefined,
+    timeLog: (...args) => {
+      stdout.push(args.map(String).join(" "));
+    },
+    trace: (...args) => {
+      stderr.push(args.map(String).join(" "));
+    },
+    warn: (...args) => {
+      stderr.push(args.map(String).join(" "));
+    },
   });
 
 const runCli = (args: ReadonlyArray<string>, options: RunCliOptions = {}) =>
-  Effect.promise(async (): Promise<CliResult> => {
-    const stdinMode = options.stdinMode ?? (options.stdinText === undefined ? "ignore" : "pipe");
-    const proc = Bun.spawn(["bun", "run", "src/main.ts", ...args], {
-      cwd: REPO_ROOT,
-      env: { ...process.env, ...options.env },
-      stdin: stdinMode,
-      stdout: "pipe",
-      stderr: "pipe",
+  Effect.gen(function* () {
+    const stdout: Array<string> = [];
+    const stderr: Array<string> = [];
+    const runInputs: Array<RunInput> = [];
+    let exitCode = 0;
+    let stdinReadCount = 0;
+
+    const hostLayer = HostService.layerTest({
+      getCwd: () => Effect.succeed(options.cwd ?? "/tmp/counsel"),
+      getEnv: () => Effect.succeed(options.env ?? {}),
+      readPipedStdin: () => {
+        stdinReadCount += 1;
+        return Effect.succeed(options.stdinText);
+      },
+      setExitCode: (code) =>
+        Effect.sync(() => {
+          exitCode = code;
+        }),
     });
 
-    if (stdinMode === "pipe" && proc.stdin != null) {
-      if (options.stdinText !== undefined) {
-        proc.stdin.write(options.stdinText);
-      }
-      if (options.closeStdin ?? options.stdinText !== undefined) {
-        proc.stdin.end();
-      }
-    }
+    const runLayer = Layer.succeed(RunService, {
+      run: (input) => {
+        runInputs.push(input);
+        return options.runImpl !== undefined
+          ? options.runImpl(input)
+          : Effect.succeed(defaultPreview());
+      },
+    });
 
-    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-    const exitResult = await Promise.race([
-      proc.exited.then((exitCode) => ({ exitCode, timedOut: false as const })),
-      new Promise<{ readonly exitCode: number; readonly timedOut: true }>((resolve) => {
-        timeoutHandle = setTimeout(() => {
-          proc.kill("SIGKILL");
-          void proc.exited.then((exitCode) => resolve({ exitCode, timedOut: true }));
-        }, options.timeoutMs ?? 1_500);
-      }),
-    ]);
-    if (timeoutHandle !== undefined) {
-      clearTimeout(timeoutHandle);
-    }
+    yield* runCounsel(args).pipe(
+      Effect.provide(
+        Layer.mergeAll(BunServices.layer, testConsoleLayer(stdout, stderr), hostLayer, runLayer),
+      ),
+    );
 
-    const [stdout, stderr] = await Promise.all([
-      proc.stdout === null ? Promise.resolve("") : new Response(proc.stdout).text(),
-      proc.stderr === null ? Promise.resolve("") : new Response(proc.stderr).text(),
-    ]);
-
-    return { ...exitResult, stdout, stderr };
+    return {
+      exitCode,
+      stdout: stdout.join("\n"),
+      stderr: stderr.join("\n"),
+      runInputs,
+      stdinReadCount,
+    } satisfies CliResult;
   });
 
 describe("counsel CLI", () => {
-  it.scopedLive("prints a JSON dry-run preview", () =>
+  it.effect("prints a JSON dry-run preview", () =>
     Effect.gen(function* () {
-      const fs = yield* FileSystem;
-      const path = yield* Path;
-      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "counsel-cli-test-" });
-      const binDir = path.join(cwd, "bin");
-      yield* fs.makeDirectory(binDir, { recursive: true });
-      yield* writeExecutable(
-        path.join(binDir, "codex"),
-        "#!/usr/bin/env bash\nprintf 'codex placeholder\\n'\n",
-      );
-
-      const result = yield* runCli(["--from", "claude", "--dry-run", "--json", "review this"], {
-        env: { PATH: `${binDir}:${process.env["PATH"] ?? ""}` },
-      });
+      const result = yield* runCli(["--from", "claude", "--dry-run", "--json", "review this"]);
 
       expect(result.exitCode).toBe(0);
-      expect(result.timedOut).toBe(false);
       const preview = JSON.parse(result.stdout);
       expect(preview.source).toBe("claude");
       expect(preview.target).toBe("codex");
-      expect(preview.invocation.cmd).toContain("codex");
-    }).pipe(Effect.provide(BunServices.layer)),
+      expect(preview.invocation.cmd).toBe("codex");
+      expect(Option.isSome(result.runInputs[0]?.prompt ?? Option.none())).toBe(true);
+    }),
   );
 
-  it.scopedLive("runs the opposite agent and writes run artifacts", () =>
+  it.effect("prints progress and a summary for completed runs", () =>
     Effect.gen(function* () {
-      const fs = yield* FileSystem;
-      const path = yield* Path;
-      const execDir = yield* fs.makeTempDirectoryScoped({ prefix: "counsel-cli-test-" });
-      const binDir = path.join(execDir, "bin");
-      const outputDir = path.join(execDir, "out");
-      yield* fs.makeDirectory(binDir, { recursive: true });
-      yield* writeExecutable(
-        path.join(binDir, "claude"),
-        "#!/usr/bin/env bash\nprintf 'claude called: %s\\n' \"$*\"\nprintf 'stderr line\\n' >&2\n",
-      );
-
-      const result = yield* runCli(
-        ["--from", "codex", "--json", "--output-dir", outputDir, "challenge the migration plan"],
-        { env: { PATH: `${binDir}:${process.env["PATH"] ?? ""}` } },
-      );
+      const result = yield* runCli(["--from", "codex", "challenge the migration plan"], {
+        runImpl: () => Effect.succeed(defaultManifest()),
+      });
 
       expect(result.exitCode).toBe(0);
-      expect(result.timedOut).toBe(false);
-
-      const manifest = JSON.parse(result.stdout);
-      const outputText = yield* fs.readFileString(manifest.outputFile);
-      const stderrText = yield* fs.readFileString(manifest.stderrFile);
-      const promptText = yield* fs.readFileString(manifest.promptFilePath);
-
-      expect(manifest.source).toBe("codex");
-      expect(manifest.target).toBe("claude");
-      expect(outputText).toContain("claude called:");
-      expect(stderrText).toContain("stderr line");
-      expect(promptText).toBe("challenge the migration plan");
-    }).pipe(Effect.provide(BunServices.layer)),
+      expect(result.stderr).toContain("Routing prompt to the opposite agent...");
+      expect(result.stderr).toContain("Status:   success");
+      expect(result.stderr).toContain("claude.md");
+    }),
   );
 
-  it.live("returns a usage error when source detection is ambiguous", () =>
+  it.effect("returns a usage error when source detection is ambiguous", () =>
     Effect.gen(function* () {
       const result = yield* runCli(["--json", "review this"], {
-        env: {
-          CLAUDE_PROJECT_DIR: undefined,
-          CODEX_THREAD_ID: undefined,
-          CODEX_CI: undefined,
-        },
+        runImpl: () =>
+          Effect.fail(
+            new CounselError({
+              message: "Cannot infer the current agent. Pass --from claude or --from codex.",
+              code: ErrorCode.AMBIGUOUS_PROVIDER,
+            }),
+          ),
       });
 
       expect(result.exitCode).toBe(2);
-      expect(result.timedOut).toBe(false);
       const error = JSON.parse(result.stdout);
       expect(error.code).toBe("AMBIGUOUS_PROVIDER");
     }),
   );
 
-  it.live("emits JSON for invalid --from values", () =>
+  it.effect("emits JSON for invalid --from values", () =>
     Effect.gen(function* () {
       const result = yield* runCli(["--json", "--from", "nope", "review this"]);
 
       expect(result.exitCode).toBe(2);
-      expect(result.timedOut).toBe(false);
       const error = JSON.parse(result.stdout);
       expect(error.code).toBe("CLI_USAGE_ERROR");
       expect(error.message).toContain("Invalid value for flag --from");
     }),
   );
 
-  it.live("emits JSON for unknown flags", () =>
+  it.effect("emits JSON for unknown flags", () =>
     Effect.gen(function* () {
       const result = yield* runCli(["--json", "--bogus", "review this"]);
 
       expect(result.exitCode).toBe(2);
-      expect(result.timedOut).toBe(false);
       const error = JSON.parse(result.stdout);
       expect(error.code).toBe("CLI_USAGE_ERROR");
       expect(error.message).toContain("Unrecognized flag");
     }),
   );
 
-  it.live("supports -V as a version alias", () =>
+  it.effect("supports -V as a version alias", () =>
     Effect.gen(function* () {
       const result = yield* runCli(["-V"]);
 
       expect(result.exitCode).toBe(0);
-      expect(result.timedOut).toBe(false);
-      expect(result.stdout.trim()).toBe(`counsel v${VERSION}`);
+      expect(stripAnsi(result.stdout).trim()).toBe(`counsel v${VERSION}`);
     }),
   );
 
-  it.scopedLive("ignores an open stdin pipe when an inline prompt is provided", () =>
+  it.effect("does not read stdin when an inline prompt is provided", () =>
     Effect.gen(function* () {
-      const fs = yield* FileSystem;
-      const path = yield* Path;
-      const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "counsel-cli-test-" });
-      const binDir = path.join(cwd, "bin");
-      yield* fs.makeDirectory(binDir, { recursive: true });
-      yield* writeExecutable(
-        path.join(binDir, "codex"),
-        "#!/usr/bin/env bash\nprintf 'codex placeholder\\n'\n",
-      );
-
       const result = yield* runCli(["--from", "claude", "--dry-run", "--json", "review this"], {
-        env: { PATH: `${binDir}:${process.env["PATH"] ?? ""}` },
-        stdinMode: "pipe",
-        closeStdin: false,
-        timeoutMs: 1_000,
+        stdinText: "ignored stdin",
       });
 
-      expect(result.timedOut).toBe(false);
-      expect(result.exitCode).toBe(0);
-      const preview = JSON.parse(result.stdout);
-      expect(preview.promptSource).toBe("inline");
-    }).pipe(Effect.provide(BunServices.layer)),
+      expect(result.stdinReadCount).toBe(0);
+      expect(result.runInputs).toHaveLength(1);
+      expect(result.runInputs[0]?.stdinText).toBeUndefined();
+    }),
   );
 });

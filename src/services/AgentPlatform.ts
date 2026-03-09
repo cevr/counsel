@@ -2,6 +2,7 @@ import { Effect, Layer, Option, ServiceMap } from "effect";
 import { CLAUDE_READ_ONLY_TOOLS, sanitizePath } from "../constants.js";
 import { CounselError, ErrorCode } from "../errors/index.js";
 import type { Invocation, Profile, Provider } from "../types.js";
+import { HostService } from "./Host.js";
 
 const modelReasoningEffort = (profile: Profile): string => (profile === "deep" ? "high" : "medium");
 
@@ -94,9 +95,10 @@ export class AgentPlatformService extends ServiceMap.Service<
     ) => Effect.Effect<Invocation, CounselError>;
   }
 >()("@cvr/counsel/services/AgentPlatform/AgentPlatformService") {
-  static layer: Layer.Layer<AgentPlatformService> = Layer.succeed(
+  static layer: Layer.Layer<AgentPlatformService, never, HostService> = Layer.effect(
     AgentPlatformService,
-    (() => {
+    Effect.gen(function* () {
+      const host = yield* HostService;
       const commands: Record<Provider, string> = {
         claude: "claude",
         codex: "codex",
@@ -105,7 +107,7 @@ export class AgentPlatformService extends ServiceMap.Service<
       const resolveSource = (requested: Option.Option<Provider>) =>
         Option.isSome(requested)
           ? Effect.succeed(requested.value)
-          : detectSourceFromEnv(process.env);
+          : host.getEnv().pipe(Effect.flatMap(detectSourceFromEnv));
 
       const ensureExecutable = (provider: Provider) =>
         Effect.sync(() => Bun.which(commands[provider])).pipe(
@@ -142,7 +144,7 @@ export class AgentPlatformService extends ServiceMap.Service<
         ensureExecutable,
         buildInvocation,
       };
-    })(),
+    }),
   );
 
   static layerTest = (
