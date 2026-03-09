@@ -1,0 +1,7 @@
+agents/
+bin/
+coverage/
+node_modules/
+*.log
+*.tsbuildinfo
+.DS_Store
