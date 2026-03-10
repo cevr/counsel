@@ -9,8 +9,16 @@ import {
 } from "../../src/services/AgentPlatform.js";
 
 describe("AgentPlatform helpers", () => {
-  it.effect("detects Claude from CLAUDE_PROJECT_DIR", () =>
-    detectSourceFromEnv({ CLAUDE_PROJECT_DIR: "/tmp/project" }).pipe(
+  it.effect("detects Claude from CLAUDE_CODE", () =>
+    detectSourceFromEnv({ CLAUDE_CODE: "1" }).pipe(
+      Effect.map((provider) => {
+        expect(provider).toBe("claude");
+      }),
+    ),
+  );
+
+  it.effect("detects Claude from CLAUDE_CODE_ENTRYPOINT fallback", () =>
+    detectSourceFromEnv({ CLAUDE_CODE_ENTRYPOINT: "cli" }).pipe(
       Effect.map((provider) => {
         expect(provider).toBe("claude");
       }),

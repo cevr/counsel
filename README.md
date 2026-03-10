@@ -46,7 +46,7 @@ Each run writes:
 
 - `claude` on `PATH` for Claude targets
 - `codex` on `PATH` for Codex targets
-- Auto-detection via `CLAUDE_PROJECT_DIR`, `CODEX_THREAD_ID`, or `CODEX_CI`
+- Auto-detection via `CLAUDE_CODE`, `CLAUDE_CODE_ENTRYPOINT`, `CODEX_THREAD_ID`, or `CODEX_CI`
 
 If detection is ambiguous, pass `--from`.
 
