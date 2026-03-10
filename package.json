@@ -1,6 +1,6 @@
 {
   "name": "@cvr/counsel",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Route a prompt from Claude to Codex or from Codex to Claude",
   "keywords": [
     "ai",
