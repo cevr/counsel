@@ -4,7 +4,8 @@ import { CounselError, ErrorCode } from "../errors/index.js";
 import type { Invocation, Profile, Provider } from "../types.js";
 import { HostService } from "./Host.js";
 
-const modelReasoningEffort = (profile: Profile): string => (profile === "deep" ? "high" : "medium");
+const modelReasoningEffort = (profile: Profile): string =>
+  profile === "deep" ? "xhigh" : "medium";
 
 const claudeModel = (profile: Profile): string => (profile === "deep" ? "opus" : "sonnet");
 
