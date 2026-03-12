@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.0.3
+
+### Patch Changes
+
+- [`1a5a6a0`](https://github.com/cevr/counsel/commit/1a5a6a00634670342e22b16b4d1360ba16c9504e) Thanks [@cevr](https://github.com/cevr)! - Bump Codex deep profile reasoning effort from high to xhigh
+
 ## 0.0.2
 
 ### Patch Changes
