@@ -84,13 +84,15 @@ counsel --from codex "Challenge this migration plan"
 
 ## Output
 
-Each run writes a directory under `/tmp/counsel/<slug>/`:
+Each run writes a directory under `/tmp/counsel/<cwd-bucket>/<slug>/`:
 
 ```text
 prompt.md
 claude.md or codex.md
 claude.stderr or codex.stderr
 ```
+
+The `<cwd-bucket>` groups runs by working directory (e.g. `personal-counsel-a1b2c3d4`).
 
 Read in this order:
 

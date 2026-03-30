@@ -63,8 +63,9 @@ const defaultPreview = (): RunResult => ({
     target: "codex",
     profile: "standard",
     promptSource: "inline",
-    outputDir: "/tmp/counsel/demo",
-    promptFilePath: "/tmp/counsel/demo/prompt.md",
+    outputBucket: "tmp-counsel-abc12345",
+    outputDir: "/tmp/counsel/tmp-counsel-abc12345/demo",
+    promptFilePath: "/tmp/counsel/tmp-counsel-abc12345/demo/prompt.md",
     invocation: {
       cmd: "codex",
       args: ["exec", "Read the file"],
@@ -79,6 +80,7 @@ const defaultManifest = (): RunResult => ({
     timestamp: "2026-03-08T00:00:00.000Z",
     slug: "demo-run",
     cwd: "/tmp/counsel",
+    outputBucket: "tmp-counsel-abc12345",
     promptSource: "inline",
     source: "codex",
     target: "claude",
@@ -86,9 +88,9 @@ const defaultManifest = (): RunResult => ({
     status: "success",
     exitCode: 0,
     durationMs: 42,
-    promptFilePath: "/tmp/counsel/demo-run/prompt.md",
-    outputFile: "/tmp/counsel/demo-run/claude.md",
-    stderrFile: "/tmp/counsel/demo-run/claude.stderr",
+    promptFilePath: "/tmp/counsel/tmp-counsel-abc12345/demo-run/prompt.md",
+    outputFile: "/tmp/counsel/tmp-counsel-abc12345/demo-run/claude.md",
+    stderrFile: "/tmp/counsel/tmp-counsel-abc12345/demo-run/claude.stderr",
   },
 });
 
@@ -194,7 +196,8 @@ describe("counsel CLI", () => {
       expect(preview.source).toBe("claude");
       expect(preview.target).toBe("codex");
       expect(preview.invocation.cmd).toBe("codex");
-      expect(preview.outputDir).toBe("/tmp/counsel/demo");
+      expect(preview.outputDir).toBe("/tmp/counsel/tmp-counsel-abc12345/demo");
+      expect(preview.outputBucket).toBe("tmp-counsel-abc12345");
       expect(Option.isSome(result.runInputs[0]?.prompt ?? Option.none())).toBe(true);
     }),
   );
@@ -209,7 +212,8 @@ describe("counsel CLI", () => {
       expect(result.stderr).toContain("Routing prompt to the opposite agent...");
       const manifest = JSON.parse(result.stdout);
       expect(manifest.status).toBe("success");
-      expect(manifest.outputFile).toBe("/tmp/counsel/demo-run/claude.md");
+      expect(manifest.outputFile).toBe("/tmp/counsel/tmp-counsel-abc12345/demo-run/claude.md");
+      expect(manifest.outputBucket).toBe("tmp-counsel-abc12345");
     }),
   );
 

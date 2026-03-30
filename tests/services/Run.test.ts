@@ -4,6 +4,7 @@ import { describe, expect, it } from "effect-bun-test";
 import { Effect, Layer, Option } from "effect";
 import { FileSystem } from "effect/FileSystem";
 import { Path } from "effect/Path";
+import { cwdBucket } from "../../src/constants.js";
 import { AgentPlatformService } from "../../src/services/AgentPlatform.js";
 import { InvocationRunnerService } from "../../src/services/InvocationRunner.js";
 import { RunService } from "../../src/services/Run.js";
@@ -65,6 +66,7 @@ describe("RunService", () => {
       expect(result.preview.source).toBe("claude");
       expect(result.preview.target).toBe("codex");
       expect(result.preview.promptSource).toBe("inline");
+      expect(result.preview.outputBucket).toBe(cwdBucket(cwd));
       expect(yield* fs.exists(result.preview.promptFilePath)).toBe(false);
     }).pipe(Effect.provide(TestLayer)),
   );
@@ -103,6 +105,7 @@ describe("RunService", () => {
       expect(manifest.target).toBe("claude");
       expect(manifest.profile).toBe("deep");
       expect(manifest.status).toBe("success");
+      expect(manifest.outputBucket).toBe(cwdBucket(cwd));
       expect(promptText).toBe("check the command wiring");
       expect(outputText).toContain("second opinion");
       expect(stderrText).toContain("warning");

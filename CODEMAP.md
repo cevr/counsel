@@ -2,7 +2,7 @@
 
 ## Overview
 
-Single-command Bun CLI. Detect current agent, flip to the opposite one, print a structured stdout payload, write temp artifacts under `/tmp/counsel`.
+Single-command Bun CLI. Detect current agent, flip to the opposite one, print a structured stdout payload, write temp artifacts under `/tmp/counsel/<cwd-bucket>/`.
 
 ## Key Files
 

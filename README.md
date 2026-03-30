@@ -36,11 +36,13 @@ Flags: `-f/--file`, `--from`, `--deep`, `-o/--output-dir`, `--dry-run`, `-V/--ve
 Each run writes:
 
 ```text
-/tmp/counsel/<slug>/
+/tmp/counsel/<cwd-bucket>/<slug>/
 ├── prompt.md
 ├── claude.md or codex.md
 └── claude.stderr or codex.stderr
 ```
+
+The `<cwd-bucket>` groups runs by working directory (e.g. `personal-counsel-a1b2c3d4`).
 
 ## Requirements
 

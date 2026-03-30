@@ -12,3 +12,19 @@ export const sanitizePath = (path: string): string =>
       return code === 0x09 || code > 0x1f;
     })
     .join("");
+
+export const cwdBucket = (cwd: string): string => {
+  const normalized = cwd.replace(/\\/g, "/").replace(/\/+$/, "");
+  const segments = normalized.split("/").filter((s) => s.length > 0);
+  const tail = segments
+    .slice(-2)
+    .map((s) =>
+      s
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, ""),
+    )
+    .filter((s) => s.length > 0);
+  const hash = new Bun.CryptoHasher("sha256").update(normalized).digest("hex").slice(0, 8);
+  return tail.length > 0 ? `${tail.join("-")}-${hash}` : hash;
+};
