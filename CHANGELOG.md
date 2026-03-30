@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.0
+
+### Minor Changes
+
+- [`e8bc5f7`](https://github.com/cevr/counsel/commit/e8bc5f783b7844645fd88200e4451ebb503eab42) Thanks [@cevr](https://github.com/cevr)! - Group output artifacts by working directory using a deterministic cwd bucket (`<segments>-<hash>`). Adds `outputBucket` field to both `RunManifest` and `DryRunPreview` stdout payloads.
+
 ## 0.0.3
 
 ### Patch Changes
